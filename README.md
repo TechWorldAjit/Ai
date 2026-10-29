@@ -1,4 +1,4 @@
-# APEX Global Website, Tool & AI Directory
+# AJIT Global Website, Tool & AI Directory
 
 > **The Ultimate Living Index of Useful Websites, AI Tools, Web Apps, Software, and Digital Resources.**  
 > Powered by the Google Gemini API, persistent MongoDB database, evidence-based web discovery, strict global deduplication, and an explainable multi-signal ranking engine.

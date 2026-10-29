@@ -47,7 +47,7 @@ export default function Header({
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-bold tracking-tight text-white text-base">APEX</span>
+                <span className="font-bold tracking-tight text-white text-base">AJIT</span>
                 <span className="rounded bg-indigo-500/20 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-indigo-300 border border-indigo-500/30">
                   GLOBAL DIRECTORY
                 </span>

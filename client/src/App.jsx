@@ -44,7 +44,7 @@ export default function App() {
   // Saved / Bookmarked Tools
   const [savedIds, setSavedIds] = useState(() => {
     try {
-      const stored = localStorage.getItem('apex_saved_tools');
+      const stored = localStorage.getItem('ajit_saved_tools') || localStorage.getItem('apex_saved_tools');
       return new Set(stored ? JSON.parse(stored) : []);
     } catch {
       return new Set();
@@ -60,7 +60,7 @@ export default function App() {
   // Sync saved to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('apex_saved_tools', JSON.stringify(Array.from(savedIds)));
+      localStorage.setItem('ajit_saved_tools', JSON.stringify(Array.from(savedIds)));
     } catch (e) {
       console.warn('LocalStorage error:', e);
     }
