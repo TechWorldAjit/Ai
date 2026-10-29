@@ -1,0 +1,32 @@
+{
+  "name": "ai-directory",
+  "version": "1.0.0",
+  "description": "The Ultimate Global Directory of Useful Websites, AI Tools, Web Apps, Software, and Digital Resources",
+  "main": "server/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "cd client && npm install && npm run build",
+    "start": "node server/index.js",
+    "server": "node server/index.js",
+    "client": "npm run dev --prefix client",
+    "dev": "node server/index.js & npm run dev --prefix client",
+    "seed": "node server/db/seed.js",
+    "test": "node --test server/tests/*.test.js"
+  },
+  "keywords": [
+    "ai-directory",
+    "tools",
+    "gemini",
+    "mongodb"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mongodb": "^6.13.0",
+    "validator": "^13.12.0"
+  }
+}
