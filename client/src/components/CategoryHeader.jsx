@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, Trash2, Clock, ShieldCheck, Layers } from 'lucide-react';
+import { Sparkles, Trash2, Clock, ShieldCheck, Layers, Pin } from 'lucide-react';
 
 export default function CategoryHeader({
   category,
@@ -7,6 +7,8 @@ export default function CategoryHeader({
   onTriggerUpdate,
   isUpdating = false,
   onOpenDeleteCategory,
+  isPinned = false,
+  onTogglePinCategory,
 }) {
   const [targetCount, setTargetCount] = useState(100);
 
@@ -77,6 +79,22 @@ export default function CategoryHeader({
               <Sparkles className={`h-4 w-4 text-cyan-200 ${isUpdating ? 'animate-spin' : 'group-hover:rotate-12 transition-transform'}`} />
               <span>{isUpdating ? `Researching ${targetCount}+ Tools...` : `Update with Gemini (${targetCount}+)`}</span>
             </button>
+
+            {/* Pin / Unpin Category Button (Unlimited Pinned Categories) */}
+            {onTogglePinCategory && (
+              <button
+                onClick={() => onTogglePinCategory(category.slug)}
+                className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-xs font-medium transition-all ${
+                  isPinned
+                    ? 'border-amber-500/50 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 shadow-sm'
+                    : 'border-border/80 bg-surface text-gray-300 hover:text-amber-300 hover:border-amber-500/40 hover:bg-surface-elevated'
+                }`}
+                title={isPinned ? `Unpin category "${category.name}"` : `Pin category "${category.name}"`}
+              >
+                <Pin className={`h-3.5 w-3.5 ${isPinned ? 'fill-amber-400 text-amber-400' : 'text-gray-400'}`} />
+                <span>{isPinned ? 'Pinned' : 'Pin Category'}</span>
+              </button>
+            )}
 
             {/* Delete Category Button with Confirmation */}
             <button

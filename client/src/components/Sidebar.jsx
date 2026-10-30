@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Folder,
   ChevronRight,
@@ -13,6 +13,7 @@ import {
   Search,
   Hash,
   Trash2,
+  Pin,
 } from 'lucide-react';
 
 // Icon resolver helper
@@ -35,12 +36,39 @@ export default function Sidebar({
   isOpen,
   onClose,
   onOpenDeleteCategory,
+  pinnedCategorySlugs = new Set(),
+  onTogglePinCategory,
 }) {
   const [filterQuery, setFilterQuery] = useState('');
   const [expandedParents, setExpandedParents] = useState(() => {
     // Expand the parent of the currently selected category or first parent by default
     return new Set(['ai-tools', 'creative-design', 'development-cs', 'business-productivity']);
   });
+
+  // Flat map to quickly find category metadata by slug
+  const allCategoriesMap = useMemo(() => {
+    const map = new Map();
+    categories.forEach((parent) => {
+      map.set(parent.slug, { ...parent, isParent: true });
+      if (parent.subcategories) {
+        parent.subcategories.forEach((sub) => {
+          map.set(sub.slug, { ...sub, isParent: false, parentName: parent.name });
+        });
+      }
+    });
+    return map;
+  }, [categories]);
+
+  // Pinned categories list in order of selection (supports unlimited pins)
+  const pinnedCategories = useMemo(() => {
+    if (!pinnedCategorySlugs || pinnedCategorySlugs.size === 0) return [];
+    const list = [];
+    pinnedCategorySlugs.forEach((slug) => {
+      const cat = allCategoriesMap.get(slug);
+      if (cat) list.push(cat);
+    });
+    return list;
+  }, [allCategoriesMap, pinnedCategorySlugs]);
 
   const toggleExpand = (slug) => {
     setExpandedParents((prev) => {
@@ -131,6 +159,77 @@ export default function Sidebar({
             </span>
           </button>
 
+          {/* Pinned Categories Section (Unlimited Pinned Categories) */}
+          {pinnedCategories.length > 0 && (
+            <div className="pt-2 pb-1 border-b border-border/50 mb-2">
+              <div className="px-1 pb-1.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-amber-400">
+                <span className="flex items-center gap-1.5">
+                  <Pin className="h-3 w-3 fill-amber-400 text-amber-400" />
+                  Pinned Categories
+                </span>
+                <span className="font-mono text-gray-400 text-[10px]">({pinnedCategories.length})</span>
+              </div>
+              <div className="space-y-0.5">
+                {pinnedCategories.map((cat) => {
+                  const isSelected = selectedCategory === cat.slug;
+                  const IconComponent = cat.isParent ? (ICON_MAP[cat.icon] || Folder) : Hash;
+                  return (
+                    <div
+                      key={`pinned-${cat.slug}`}
+                      className={`group flex items-center justify-between rounded-lg px-2 py-1.5 text-xs transition-colors ${
+                        isSelected
+                          ? 'bg-amber-500/20 text-amber-200 font-semibold border border-amber-500/30'
+                          : 'text-gray-300 hover:bg-surface-elevated hover:text-white'
+                      }`}
+                    >
+                      <button
+                        onClick={() => {
+                          onSelectCategory(cat.slug);
+                          onClose();
+                        }}
+                        className="flex flex-1 items-center gap-2 truncate text-left"
+                      >
+                        <IconComponent
+                          className={`h-3.5 w-3.5 shrink-0 ${
+                            isSelected ? 'text-amber-400' : 'text-gray-400 group-hover:text-amber-400'
+                          } transition-colors`}
+                        />
+                        <div className="truncate flex-1">
+                          <span className="truncate">{cat.name}</span>
+                          {!cat.isParent && cat.parentName && (
+                            <span className="text-[9px] text-gray-500 block truncate">
+                              {cat.parentName}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+
+                      <div className="flex items-center gap-1">
+                        {onTogglePinCategory && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onTogglePinCategory(cat.slug);
+                            }}
+                            className="p-1 text-amber-400 hover:text-amber-300 transition-colors"
+                            title={`Unpin category "${cat.name}"`}
+                          >
+                            <Pin className="h-3 w-3 fill-amber-400" />
+                          </button>
+                        )}
+                        {cat.resourceCount > 0 && (
+                          <span className="rounded bg-surface-elevated px-1.5 py-0.2 font-mono text-[10px] text-gray-400">
+                            {cat.resourceCount}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="pt-2 pb-1 px-1">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
               Categories & Fields
@@ -142,6 +241,7 @@ export default function Sidebar({
             const isSelected = selectedCategory === parent.slug;
             const IconComponent = ICON_MAP[parent.icon] || Folder;
             const subCount = (parent.subcategories || []).length;
+            const isParentPinned = pinnedCategorySlugs.has(parent.slug);
 
             return (
               <div key={parent.slug} className="space-y-0.5">
@@ -165,6 +265,22 @@ export default function Sidebar({
                   </button>
 
                   <div className="flex items-center gap-1">
+                    {onTogglePinCategory && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTogglePinCategory(parent.slug);
+                        }}
+                        className={`p-1 rounded transition-opacity ${
+                          isParentPinned
+                            ? 'opacity-100 text-amber-400 hover:text-amber-300'
+                            : 'opacity-0 group-hover:opacity-100 text-gray-500 hover:text-amber-300'
+                        }`}
+                        title={isParentPinned ? `Unpin category "${parent.name}"` : `Pin category "${parent.name}"`}
+                      >
+                        <Pin className={`h-3 w-3 ${isParentPinned ? 'fill-amber-400 text-amber-400' : ''}`} />
+                      </button>
+                    )}
                     {onOpenDeleteCategory && (
                       <button
                         onClick={(e) => {
@@ -205,6 +321,7 @@ export default function Sidebar({
                   <div className="ml-4 pl-2 border-l border-border/60 space-y-0.5">
                     {parent.subcategories.map((sub) => {
                       const isSubSelected = selectedCategory === sub.slug;
+                      const isSubPinned = pinnedCategorySlugs.has(sub.slug);
                       return (
                         <div
                           key={sub.slug}
@@ -224,6 +341,22 @@ export default function Sidebar({
                             {sub.name}
                           </button>
                           <div className="flex items-center gap-1">
+                            {onTogglePinCategory && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onTogglePinCategory(sub.slug);
+                                }}
+                                className={`p-0.5 rounded transition-opacity ${
+                                  isSubPinned
+                                    ? 'opacity-100 text-amber-400 hover:text-amber-300'
+                                    : 'opacity-0 group-hover/sub:opacity-100 text-gray-500 hover:text-amber-300'
+                                }`}
+                                title={isSubPinned ? `Unpin category "${sub.name}"` : `Pin category "${sub.name}"`}
+                              >
+                                <Pin className={`h-2.5 w-2.5 ${isSubPinned ? 'fill-amber-400 text-amber-400' : ''}`} />
+                              </button>
+                            )}
                             {onOpenDeleteCategory && (
                               <button
                                 onClick={(e) => {

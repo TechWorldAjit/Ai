@@ -54,6 +54,16 @@ export default function App() {
     }
   });
 
+  // Pinned Categories State (unlimited pins stored in localStorage)
+  const [pinnedCategorySlugs, setPinnedCategorySlugs] = useState(() => {
+    try {
+      const stored = localStorage.getItem('ajit_pinned_categories');
+      return new Set(stored ? JSON.parse(stored) : []);
+    } catch {
+      return new Set();
+    }
+  });
+
   // Modals & Drawers
   const [activeJobId, setActiveJobId] = useState(null);
   const [isUpdatingCategory, setIsUpdatingCategory] = useState(false);
@@ -69,6 +79,29 @@ export default function App() {
       console.warn('LocalStorage error:', e);
     }
   }, [savedIds]);
+
+  // Sync pinned categories to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('ajit_pinned_categories', JSON.stringify(Array.from(pinnedCategorySlugs)));
+    } catch (e) {
+      console.warn('LocalStorage error:', e);
+    }
+  }, [pinnedCategorySlugs]);
+
+  // Toggle Category Pin / Unpin
+  const handleTogglePinCategory = useCallback((slug) => {
+    if (!slug) return;
+    setPinnedCategorySlugs((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) {
+        next.delete(slug);
+      } else {
+        next.add(slug);
+      }
+      return next;
+    });
+  }, []);
 
   // Load Categories List
   const loadCategories = useCallback(async () => {
@@ -235,6 +268,8 @@ export default function App() {
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
             onOpenDeleteCategory={(cat) => setCategoryToDelete(cat)}
+            pinnedCategorySlugs={pinnedCategorySlugs}
+            onTogglePinCategory={handleTogglePinCategory}
           />
         )}
 
@@ -255,6 +290,8 @@ export default function App() {
                 onTriggerUpdate={handleTriggerCategoryUpdate}
                 isUpdating={isUpdatingCategory}
                 onOpenDeleteCategory={(cat) => setCategoryToDelete(cat)}
+                isPinned={Boolean(currentCategoryData && pinnedCategorySlugs.has(currentCategoryData.slug))}
+                onTogglePinCategory={handleTogglePinCategory}
               />
 
               {/* Filters & Sorting */}
