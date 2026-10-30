@@ -16,7 +16,7 @@ const router = express.Router();
  */
 router.post('/category-update', async (req, res) => {
   try {
-    const { categorySlug, targetCount = 12 } = req.body;
+    const { categorySlug, targetCount = 100 } = req.body;
 
     if (!categorySlug) {
       return res.status(400).json({ success: false, error: 'categorySlug is required' });
@@ -29,9 +29,12 @@ router.post('/category-update', async (req, res) => {
       });
     }
 
+    // Default 100 tools minimum, up to 1000 tools per run
+    const validatedTarget = Math.min(1000, Math.max(100, parseInt(targetCount, 10) || 100));
+
     const jobResult = await startCategoryDiscoveryJob({
       categorySlug,
-      targetCount: Math.min(25, Math.max(5, parseInt(targetCount, 10) || 12)),
+      targetCount: validatedTarget,
       triggerSource: 'user_button',
     });
 

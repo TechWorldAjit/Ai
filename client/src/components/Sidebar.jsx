@@ -12,6 +12,7 @@ import {
   Sparkles,
   Search,
   Hash,
+  Trash2,
 } from 'lucide-react';
 
 // Icon resolver helper
@@ -33,6 +34,7 @@ export default function Sidebar({
   totalToolsCount = 0,
   isOpen,
   onClose,
+  onOpenDeleteCategory,
 }) {
   const [filterQuery, setFilterQuery] = useState('');
   const [expandedParents, setExpandedParents] = useState(() => {
@@ -163,6 +165,18 @@ export default function Sidebar({
                   </button>
 
                   <div className="flex items-center gap-1">
+                    {onOpenDeleteCategory && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenDeleteCategory(parent);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-rose-400 rounded transition-opacity"
+                        title={`Delete category "${parent.name}"`}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
                     {parent.resourceCount > 0 && (
                       <span className="rounded bg-surface-elevated px-1.5 py-0.2 font-mono text-[10px] text-gray-400">
                         {parent.resourceCount}
@@ -192,25 +206,43 @@ export default function Sidebar({
                     {parent.subcategories.map((sub) => {
                       const isSubSelected = selectedCategory === sub.slug;
                       return (
-                        <button
+                        <div
                           key={sub.slug}
-                          onClick={() => {
-                            onSelectCategory(sub.slug);
-                            onClose();
-                          }}
-                          className={`w-full flex items-center justify-between rounded-md px-2 py-1 text-[11px] transition-colors truncate ${
+                          className={`group/sub flex items-center justify-between rounded-md px-2 py-1 text-[11px] transition-colors truncate ${
                             isSubSelected
                               ? 'bg-indigo-500/25 text-indigo-200 font-medium'
                               : 'text-gray-400 hover:bg-surface-elevated hover:text-gray-200'
                           }`}
                         >
-                          <span className="truncate">{sub.name}</span>
-                          {sub.resourceCount > 0 && (
-                            <span className="rounded bg-surface-elevated/80 px-1 py-0.2 font-mono text-[9px] text-gray-400">
-                              {sub.resourceCount}
-                            </span>
-                          )}
-                        </button>
+                          <button
+                            onClick={() => {
+                              onSelectCategory(sub.slug);
+                              onClose();
+                            }}
+                            className="truncate flex-1 text-left"
+                          >
+                            {sub.name}
+                          </button>
+                          <div className="flex items-center gap-1">
+                            {onOpenDeleteCategory && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenDeleteCategory(sub);
+                                }}
+                                className="opacity-0 group-hover/sub:opacity-100 p-0.5 text-gray-500 hover:text-rose-400 rounded transition-opacity"
+                                title={`Delete "${sub.name}"`}
+                              >
+                                <Trash2 className="h-2.5 w-2.5" />
+                              </button>
+                            )}
+                            {sub.resourceCount > 0 && (
+                              <span className="rounded bg-surface-elevated/80 px-1 py-0.2 font-mono text-[9px] text-gray-400">
+                                {sub.resourceCount}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       );
                     })}
                   </div>

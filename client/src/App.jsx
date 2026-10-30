@@ -8,6 +8,7 @@ import FilterBar from './components/FilterBar';
 import JobProgressDrawer from './components/JobProgressDrawer';
 import AddCategoryModal from './components/AddCategoryModal';
 import ToolDetailModal from './components/ToolDetailModal';
+import DeleteCategoryModal from './components/DeleteCategoryModal';
 import AdminView from './components/AdminView';
 import SavedView from './components/SavedView';
 
@@ -18,6 +19,7 @@ import {
   bookmarkResource,
   triggerCategoryUpdate,
   triggerGlobalDiscovery,
+  deleteCategory,
 } from './services/api';
 
 export default function App() {
@@ -56,6 +58,7 @@ export default function App() {
   const [isUpdatingCategory, setIsUpdatingCategory] = useState(false);
   const [addCategoryOpen, setAddCategoryOpen] = useState(false);
   const [selectedTool, setSelectedTool] = useState(null);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
 
   // Sync saved to localStorage
   useEffect(() => {
@@ -150,17 +153,32 @@ export default function App() {
     }
   };
 
-  // Trigger Category Update
-  const handleTriggerCategoryUpdate = async (slug) => {
+  // Trigger Category Update (supports 100, 250, 500, 1000 tools)
+  const handleTriggerCategoryUpdate = async (slug, targetCount = 100) => {
     if (!slug) return;
     setIsUpdatingCategory(true);
     try {
-      const res = await triggerCategoryUpdate(slug, 12);
+      const res = await triggerCategoryUpdate(slug, targetCount);
       setActiveJobId(res.jobId);
     } catch (err) {
       alert(`Update Notice: ${err.message}`);
     } finally {
       setIsUpdatingCategory(false);
+    }
+  };
+
+  // Handle Confirmed Category Deletion
+  const handleConfirmDeleteCategory = async (slug) => {
+    try {
+      await deleteCategory(slug);
+      await loadCategories();
+      if (selectedCategorySlug === slug) {
+        setSelectedCategorySlug(null);
+      }
+      await loadResources();
+    } catch (err) {
+      alert(`Deletion Failed: ${err.message}`);
+      throw err;
     }
   };
 
@@ -208,6 +226,7 @@ export default function App() {
             totalToolsCount={pagination.total}
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
+            onOpenDeleteCategory={(cat) => setCategoryToDelete(cat)}
           />
         )}
 
@@ -221,12 +240,13 @@ export default function App() {
                 onSelectCategory={handleSelectCategory}
               />
 
-              {/* Category Header with Update Button */}
+              {/* Category Header with 100+ Tools Target & Delete Controls */}
               <CategoryHeader
                 category={currentCategoryData}
                 totalCount={pagination.total}
                 onTriggerUpdate={handleTriggerCategoryUpdate}
                 isUpdating={isUpdatingCategory}
+                onOpenDeleteCategory={(cat) => setCategoryToDelete(cat)}
               />
 
               {/* Filters & Sorting */}
@@ -347,6 +367,14 @@ export default function App() {
           onResourceUpdated={loadResources}
         />
       )}
+
+      {/* Delete Category Confirmation Modal */}
+      <DeleteCategoryModal
+        isOpen={Boolean(categoryToDelete)}
+        category={categoryToDelete}
+        onClose={() => setCategoryToDelete(null)}
+        onConfirmDelete={handleConfirmDeleteCategory}
+      />
     </div>
   );
 }

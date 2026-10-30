@@ -35,6 +35,17 @@ export async function createCategory(data) {
   return await res.json();
 }
 
+export async function deleteCategory(slug) {
+  const res = await fetch(`${API_BASE}/categories/${slug}`, {
+    method: 'DELETE',
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to delete category');
+  }
+  return data;
+}
+
 export async function fetchResources(params = {}) {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
@@ -66,7 +77,7 @@ export async function verifyResource(id) {
   return await res.json();
 }
 
-export async function triggerCategoryUpdate(categorySlug, targetCount = 12) {
+export async function triggerCategoryUpdate(categorySlug, targetCount = 100) {
   const res = await fetch(`${API_BASE}/jobs/category-update`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

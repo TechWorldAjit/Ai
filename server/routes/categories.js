@@ -177,7 +177,7 @@ router.post('/', async (req, res) => {
     if (fetchWebsitesImmediately) {
       discoveryJob = await startCategoryDiscoveryJob({
         categorySlug: newCategory.slug,
-        targetCount: 15,
+        targetCount: 100,
         triggerSource: 'new_category_init',
       });
     }
@@ -189,6 +189,59 @@ router.post('/', async (req, res) => {
     });
   } catch (err) {
     console.error('[CategoriesRoute] POST error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/categories/:slug
+ * Deletes a category and any nested subcategories after confirmation.
+ * CRITICAL PHILOSOPHY: All resources are permanently preserved in MongoDB.
+ * The deleted slug is safely unlinked from resources' categorySlugs array.
+ */
+router.delete('/:slug', async (req, res) => {
+  try {
+    const db = getDB();
+    const slug = req.params.slug;
+    const categoriesCollection = db.collection('categories');
+    const resourcesCollection = db.collection('resources');
+    const auditCollection = db.collection('audit_logs');
+
+    const category = await categoriesCollection.findOne({ slug });
+    if (!category) {
+      return res.status(404).json({ success: false, error: 'Category not found.' });
+    }
+
+    // Find any subcategories
+    const childCategories = await categoriesCollection.find({ parentSlug: slug }).toArray();
+    const allSlugsToDelete = [slug, ...childCategories.map((c) => c.slug)];
+
+    // 1. Remove the category slugs from all resources (PRESERVE ALL TOOLS IN DATABASE)
+    const updateResult = await resourcesCollection.updateMany(
+      { categorySlugs: { $in: allSlugsToDelete } },
+      { $pull: { categorySlugs: { $in: allSlugsToDelete } } }
+    );
+
+    // 2. Remove the categories from categories collection
+    await categoriesCollection.deleteMany({ slug: { $in: allSlugsToDelete } });
+
+    // 3. Record audit log
+    await auditCollection.insertOne({
+      action: 'category_deleted',
+      categorySlug: slug,
+      categoryName: category.name,
+      deletedSubcategories: childCategories.map((c) => c.name),
+      affectedResourcesCount: updateResult.modifiedCount,
+      timestamp: new Date(),
+    });
+
+    res.json({
+      success: true,
+      message: `Category "${category.name}" ${childCategories.length > 0 ? `and ${childCategories.length} subcategories ` : ''}deleted successfully. All ${updateResult.modifiedCount} affected resources remain permanently preserved in the database.`,
+      deletedSlugs: allSlugsToDelete,
+    });
+  } catch (err) {
+    console.error('[CategoriesRoute] DELETE error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
