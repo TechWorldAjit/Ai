@@ -6,6 +6,28 @@ import { calculateRankScores } from '../services/rankingEngine.js';
 
 const router = express.Router();
 
+// In-memory cache for category hierarchy slugs (TTL 30s for fast queries)
+let categorySlugsMap = null;
+let categorySlugsMapTimestamp = 0;
+
+async function resolveCategorySlugs(db, categorySlug) {
+  const now = Date.now();
+  if (!categorySlugsMap || now - categorySlugsMapTimestamp > 30000) {
+    const allCats = await db.collection('categories').find({}, { projection: { slug: 1, parentSlug: 1 } }).toArray();
+    const map = new Map();
+    allCats.forEach((c) => {
+      if (c.parentSlug) {
+        if (!map.has(c.parentSlug)) map.set(c.parentSlug, []);
+        map.get(c.parentSlug).push(c.slug);
+      }
+    });
+    categorySlugsMap = map;
+    categorySlugsMapTimestamp = now;
+  }
+  const children = categorySlugsMap.get(categorySlug) || [];
+  return [categorySlug, ...children];
+}
+
 /**
  * GET /api/resources
  * Paginated, filtered, and sorted resource query engine.
@@ -32,11 +54,9 @@ router.get('/', async (req, res) => {
 
     const query = {};
 
-    // Category filter: handles category or subcategories
+    // Category filter: handles category or subcategories with cached hierarchy
     if (category && category !== 'all') {
-      // If category has children, include tools that match either parent or any child
-      const childCategories = await db.collection('categories').find({ parentSlug: category }).toArray();
-      const allSlugs = [category, ...childCategories.map((c) => c.slug)];
+      const allSlugs = await resolveCategorySlugs(db, category);
       query.categorySlugs = { $in: allSlugs };
     }
 

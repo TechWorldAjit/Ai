@@ -5,20 +5,50 @@ import { startCategoryDiscoveryJob } from '../services/jobManager.js';
 
 const router = express.Router();
 
+// Cache for categories hierarchy & aggregated counts
+let cachedCategoriesResponse = null;
+let cacheTimestamp = 0;
+const CACHE_TTL_MS = 25000;
+
+export function invalidateCategoriesCache() {
+  cachedCategoriesResponse = null;
+  cacheTimestamp = 0;
+}
+
 /**
  * GET /api/categories
- * Returns all categories organized into hierarchical trees with resource counts.
+ * Returns all categories organized into hierarchical trees with accurate resource counts.
  */
 router.get('/', async (req, res) => {
   try {
+    const now = Date.now();
+    if (cachedCategoriesResponse && (now - cacheTimestamp < CACHE_TTL_MS)) {
+      return res.json(cachedCategoriesResponse);
+    }
+
     const db = getDB();
-    const categories = await db.collection('categories').find({}).sort({ order: 1, name: 1 }).toArray();
+    const [categories, countAgg, totalResourcesCount] = await Promise.all([
+      db.collection('categories').find({}).sort({ order: 1, name: 1 }).toArray(),
+      db.collection('resources').aggregate([
+        { $unwind: '$categorySlugs' },
+        { $group: { _id: '$categorySlugs', count: { $sum: 1 } } },
+      ]).toArray(),
+      db.collection('resources').countDocuments({ status: { $ne: 'broken' } }),
+    ]);
+
+    const countMap = new Map();
+    countAgg.forEach((item) => {
+      countMap.set(item._id, item.count);
+    });
 
     // Map into hierarchical parent -> children structure
     const topLevel = categories.filter((c) => !c.parentSlug);
     const childrenMap = new Map();
 
     categories.forEach((c) => {
+      // Direct count of tools tagged with this slug
+      c.resourceCount = countMap.get(c.slug) || 0;
+
       if (c.parentSlug) {
         if (!childrenMap.has(c.parentSlug)) {
           childrenMap.set(c.parentSlug, []);
@@ -27,17 +57,30 @@ router.get('/', async (req, res) => {
       }
     });
 
-    const hierarchy = topLevel.map((parent) => ({
-      ...parent,
-      subcategories: childrenMap.get(parent.slug) || [],
-    }));
+    const hierarchy = topLevel.map((parent) => {
+      const subs = childrenMap.get(parent.slug) || [];
+      const subTotal = subs.reduce((sum, s) => sum + (s.resourceCount || 0), 0);
+      const parentTotal = (countMap.get(parent.slug) || 0) + subTotal;
 
-    res.json({
+      return {
+        ...parent,
+        resourceCount: parentTotal,
+        subcategories: subs,
+      };
+    });
+
+    const responseData = {
       success: true,
       count: categories.length,
+      totalResourcesCount,
       categories: hierarchy,
       flatList: categories,
-    });
+    };
+
+    cachedCategoriesResponse = responseData;
+    cacheTimestamp = now;
+
+    res.json(responseData);
   } catch (err) {
     console.error('[CategoriesRoute] GET error:', err);
     res.status(500).json({ success: false, error: err.message });
@@ -172,6 +215,7 @@ router.post('/', async (req, res) => {
     };
 
     const insertResult = await categoriesCollection.insertOne(newCategory);
+    invalidateCategoriesCache();
 
     let discoveryJob = null;
     if (fetchWebsitesImmediately) {
@@ -224,6 +268,7 @@ router.delete('/:slug', async (req, res) => {
 
     // 2. Remove the categories from categories collection
     await categoriesCollection.deleteMany({ slug: { $in: allSlugsToDelete } });
+    invalidateCategoriesCache();
 
     // 3. Record audit log
     await auditCollection.insertOne({

@@ -1,15 +1,39 @@
 const API_BASE = '/api';
 
+// Fast in-memory cache for API calls to optimize performance and prevent flickers
+const clientCache = new Map();
+const CACHE_TTL_MS = 15000;
+
+export function clearClientCache() {
+  clientCache.clear();
+}
+
 export async function fetchCategories() {
+  const cacheKey = 'categories:all';
+  const cached = clientCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data;
+  }
+
   const res = await fetch(`${API_BASE}/categories`);
   if (!res.ok) throw new Error('Failed to load categories');
-  return await res.json();
+  const data = await res.json();
+  clientCache.set(cacheKey, { data, timestamp: Date.now() });
+  return data;
 }
 
 export async function fetchCategory(slug) {
+  const cacheKey = `category:${slug}`;
+  const cached = clientCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data;
+  }
+
   const res = await fetch(`${API_BASE}/categories/${slug}`);
   if (!res.ok) throw new Error('Failed to load category details');
-  return await res.json();
+  const data = await res.json();
+  clientCache.set(cacheKey, { data, timestamp: Date.now() });
+  return data;
 }
 
 export async function evaluateCategory(name) {
@@ -23,6 +47,7 @@ export async function evaluateCategory(name) {
 }
 
 export async function createCategory(data) {
+  clearClientCache();
   const res = await fetch(`${API_BASE}/categories`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -36,6 +61,7 @@ export async function createCategory(data) {
 }
 
 export async function deleteCategory(slug) {
+  clearClientCache();
   const res = await fetch(`${API_BASE}/categories/${slug}`, {
     method: 'DELETE',
   });
@@ -54,9 +80,17 @@ export async function fetchResources(params = {}) {
     }
   });
 
+  const cacheKey = `resources:${query.toString()}`;
+  const cached = clientCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data;
+  }
+
   const res = await fetch(`${API_BASE}/resources?${query.toString()}`);
   if (!res.ok) throw new Error('Failed to load resources');
-  return await res.json();
+  const data = await res.json();
+  clientCache.set(cacheKey, { data, timestamp: Date.now() });
+  return data;
 }
 
 export async function fetchResource(id) {
@@ -66,18 +100,21 @@ export async function fetchResource(id) {
 }
 
 export async function bookmarkResource(id) {
+  clearClientCache();
   const res = await fetch(`${API_BASE}/resources/${id}/bookmark`, { method: 'POST' });
   if (!res.ok) throw new Error('Failed to save bookmark');
   return await res.json();
 }
 
 export async function verifyResource(id) {
+  clearClientCache();
   const res = await fetch(`${API_BASE}/resources/${id}/verify`, { method: 'POST' });
   if (!res.ok) throw new Error('Failed to verify tool');
   return await res.json();
 }
 
 export async function triggerCategoryUpdate(categorySlug, targetCount = 100) {
+  clearClientCache();
   const res = await fetch(`${API_BASE}/jobs/category-update`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -91,6 +128,7 @@ export async function triggerCategoryUpdate(categorySlug, targetCount = 100) {
 }
 
 export async function triggerGlobalDiscovery() {
+  clearClientCache();
   const res = await fetch(`${API_BASE}/jobs/global-discovery`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

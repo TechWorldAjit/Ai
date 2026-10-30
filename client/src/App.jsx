@@ -32,6 +32,7 @@ export default function App() {
   const [selectedCategorySlug, setSelectedCategorySlug] = useState(null);
   const [currentCategoryData, setCurrentCategoryData] = useState(null);
   const [breadcrumbs, setBreadcrumbs] = useState([]);
+  const [totalDirectoryCount, setTotalDirectoryCount] = useState(0);
 
   // Resources Query State
   const [resources, setResources] = useState([]);
@@ -74,6 +75,9 @@ export default function App() {
     try {
       const res = await fetchCategories();
       setCategories(res.categories || []);
+      if (res.totalResourcesCount !== undefined) {
+        setTotalDirectoryCount(res.totalResourcesCount);
+      }
     } catch (err) {
       console.error('Failed to load categories:', err);
     }
@@ -116,6 +120,9 @@ export default function App() {
 
       setResources(res.resources || []);
       setPagination(res.pagination || { page: 1, limit: 25, total: 0, totalPages: 1 });
+      if (!selectedCategorySlug && !effectiveSearch && res.pagination?.total) {
+        setTotalDirectoryCount(res.pagination.total);
+      }
     } catch (err) {
       console.error('Failed to fetch resources:', err);
     } finally {
@@ -134,6 +141,7 @@ export default function App() {
     setSelectedCategorySlug(slug);
     setPagination((prev) => ({ ...prev, page: 1 }));
     setSearch('');
+    setGlobalSearch('');
     if (activeView !== 'directory') setActiveView('directory');
   };
 
@@ -223,7 +231,7 @@ export default function App() {
             categories={categories}
             selectedCategory={selectedCategorySlug}
             onSelectCategory={handleSelectCategory}
-            totalToolsCount={pagination.total}
+            totalToolsCount={totalDirectoryCount || pagination.total}
             isOpen={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
             onOpenDeleteCategory={(cat) => setCategoryToDelete(cat)}
@@ -243,7 +251,7 @@ export default function App() {
               {/* Category Header with 100+ Tools Target & Delete Controls */}
               <CategoryHeader
                 category={currentCategoryData}
-                totalCount={pagination.total}
+                totalCount={selectedCategorySlug ? pagination.total : (totalDirectoryCount || pagination.total)}
                 onTriggerUpdate={handleTriggerCategoryUpdate}
                 isUpdating={isUpdatingCategory}
                 onOpenDeleteCategory={(cat) => setCategoryToDelete(cat)}
