@@ -238,6 +238,107 @@ router.post('/', async (req, res) => {
 });
 
 /**
+ * POST /api/categories/prune-low-count
+ * Deletes any category that has less than threshold (default 5) entries.
+ * CRITICAL PHILOSOPHY: All resources/tools are permanently preserved in MongoDB.
+ */
+router.post('/prune-low-count', async (req, res) => {
+  try {
+    const threshold = Number(req.body?.threshold) || 5;
+    const db = getDB();
+    const categoriesCollection = db.collection('categories');
+    const resourcesCollection = db.collection('resources');
+    const auditCollection = db.collection('audit_logs');
+
+    const categories = await categoriesCollection.find({}).toArray();
+    const countAgg = await resourcesCollection.aggregate([
+      { $unwind: '$categorySlugs' },
+      { $group: { _id: '$categorySlugs', count: { $sum: 1 } } },
+    ]).toArray();
+
+    const countMap = new Map();
+    countAgg.forEach((item) => {
+      countMap.set(item._id, item.count);
+    });
+
+    const topLevel = categories.filter((c) => !c.parentSlug);
+    const childrenMap = new Map();
+    categories.forEach((c) => {
+      if (c.parentSlug) {
+        if (!childrenMap.has(c.parentSlug)) childrenMap.set(c.parentSlug, []);
+        childrenMap.get(c.parentSlug).push(c);
+      }
+    });
+
+    const slugsToDelete = new Set();
+
+    // 1. Identify subcategories with < threshold entries
+    categories.forEach((c) => {
+      if (c.parentSlug) {
+        const count = countMap.get(c.slug) || 0;
+        if (count < threshold) {
+          slugsToDelete.add(c.slug);
+        }
+      }
+    });
+
+    // 2. Identify top-level categories whose total (direct + non-deleted subcategories) < threshold
+    topLevel.forEach((parent) => {
+      const subs = childrenMap.get(parent.slug) || [];
+      const survivingSubs = subs.filter((s) => !slugsToDelete.has(s.slug));
+      const subsTotal = survivingSubs.reduce((sum, s) => sum + (countMap.get(s.slug) || 0), 0);
+      const parentDirect = countMap.get(parent.slug) || 0;
+      const total = parentDirect + subsTotal;
+
+      if (total < threshold) {
+        slugsToDelete.add(parent.slug);
+      }
+    });
+
+    const allSlugsArray = Array.from(slugsToDelete);
+
+    if (allSlugsArray.length === 0) {
+      return res.json({
+        success: true,
+        message: `No categories found with less than ${threshold} entries.`,
+        deletedCount: 0,
+        deletedSlugs: [],
+      });
+    }
+
+    // 3. Remove category slugs from all resources (PRESERVE ALL TOOLS IN DATABASE)
+    const updateResult = await resourcesCollection.updateMany(
+      { categorySlugs: { $in: allSlugsArray } },
+      { $pull: { categorySlugs: { $in: allSlugsArray } } }
+    );
+
+    // 4. Remove categories from categories collection
+    const deleteResult = await categoriesCollection.deleteMany({ slug: { $in: allSlugsArray } });
+    invalidateCategoriesCache();
+
+    // 5. Record audit log
+    await auditCollection.insertOne({
+      action: 'prune_low_count_categories',
+      threshold,
+      deletedCount: deleteResult.deletedCount,
+      deletedSlugs: allSlugsArray,
+      affectedResourcesCount: updateResult.modifiedCount,
+      timestamp: new Date(),
+    });
+
+    res.json({
+      success: true,
+      message: `Successfully deleted ${deleteResult.deletedCount} categories with less than ${threshold} entries. All ${updateResult.modifiedCount} affected resources remain permanently preserved in MongoDB.`,
+      deletedCount: deleteResult.deletedCount,
+      deletedSlugs: allSlugsArray,
+    });
+  } catch (err) {
+    console.error('[CategoriesRoute] prune-low-count error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * DELETE /api/categories/:slug
  * Deletes a category and any nested subcategories after confirmation.
  * CRITICAL PHILOSOPHY: All resources are permanently preserved in MongoDB.

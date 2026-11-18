@@ -9,6 +9,7 @@ import JobProgressDrawer from './components/JobProgressDrawer';
 import AddCategoryModal from './components/AddCategoryModal';
 import ToolDetailModal from './components/ToolDetailModal';
 import DeleteCategoryModal from './components/DeleteCategoryModal';
+import PruneLowCategoriesModal from './components/PruneLowCategoriesModal';
 import AdminView from './components/AdminView';
 import SavedView from './components/SavedView';
 
@@ -20,6 +21,7 @@ import {
   triggerCategoryUpdate,
   triggerGlobalDiscovery,
   deleteCategory,
+  pruneLowCountCategories,
 } from './services/api';
 
 export default function App() {
@@ -70,6 +72,7 @@ export default function App() {
   const [addCategoryOpen, setAddCategoryOpen] = useState(false);
   const [selectedTool, setSelectedTool] = useState(null);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [pruneModalOpen, setPruneModalOpen] = useState(false);
 
   // Sync saved to localStorage
   useEffect(() => {
@@ -223,6 +226,19 @@ export default function App() {
     }
   };
 
+  // Handle Master Deletion of Categories with < 5 entries
+  const handleConfirmPruneLowCategories = async () => {
+    try {
+      const res = await pruneLowCountCategories(5);
+      await loadCategories();
+      await loadResources();
+      alert(res.message || 'Categories with less than 5 entries have been deleted.');
+    } catch (err) {
+      alert(`Pruning Failed: ${err.message}`);
+      throw err;
+    }
+  };
+
   // Trigger Global Discovery
   const handleTriggerGlobalDiscovery = async () => {
     try {
@@ -292,6 +308,7 @@ export default function App() {
                 onOpenDeleteCategory={(cat) => setCategoryToDelete(cat)}
                 isPinned={Boolean(currentCategoryData && pinnedCategorySlugs.has(currentCategoryData.slug))}
                 onTogglePinCategory={handleTogglePinCategory}
+                onOpenPruneModal={() => setPruneModalOpen(true)}
               />
 
               {/* Filters & Sorting */}
@@ -419,6 +436,13 @@ export default function App() {
         category={categoryToDelete}
         onClose={() => setCategoryToDelete(null)}
         onConfirmDelete={handleConfirmDeleteCategory}
+      />
+
+      {/* Master Prune Low Categories Confirmation Modal (< 5 Entries) */}
+      <PruneLowCategoriesModal
+        isOpen={pruneModalOpen}
+        onClose={() => setPruneModalOpen(false)}
+        onConfirmPrune={handleConfirmPruneLowCategories}
       />
     </div>
   );

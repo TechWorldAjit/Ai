@@ -9,6 +9,7 @@ export default function CategoryHeader({
   onOpenDeleteCategory,
   isPinned = false,
   onTogglePinCategory,
+  onOpenPruneModal,
 }) {
   const [targetCount, setTargetCount] = useState(100);
 
@@ -103,6 +104,20 @@ export default function CategoryHeader({
               title={`Delete category "${category.name}"`}
             >
               <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Master Action Button on Home: Delete categories with < 5 entries */}
+        {!category && onOpenPruneModal && (
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <button
+              onClick={onOpenPruneModal}
+              className="group flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2.5 text-xs font-semibold text-rose-300 shadow-sm transition-all hover:bg-rose-500/20 hover:border-rose-500/60 active:scale-[0.98]"
+              title="Delete all categories containing fewer than 5 entries (all tools permanently preserved)"
+            >
+              <Trash2 className="h-4 w-4 text-rose-400 group-hover:rotate-12 transition-transform" />
+              <span>Delete Categories (&lt; 5 Entries)</span>
             </button>
           </div>
         )}

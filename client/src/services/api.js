@@ -72,6 +72,20 @@ export async function deleteCategory(slug) {
   return data;
 }
 
+export async function pruneLowCountCategories(threshold = 5) {
+  clearClientCache();
+  const res = await fetch(`${API_BASE}/categories/prune-low-count`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ threshold }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to prune categories');
+  }
+  return data;
+}
+
 export async function fetchResources(params = {}) {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {

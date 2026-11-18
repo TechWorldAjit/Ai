@@ -76,5 +76,75 @@ describe('Category Deletion & Zero-Deletion Preservation', () => {
     const auditCheck = await auditCollection.findOne({ categorySlug: slug });
     assert.ok(auditCheck, 'Audit log entry should exist');
   });
+
+  it('should identify and prune categories with fewer than 5 entries while preserving resources', async () => {
+    const categoriesCollection = db.collection('categories');
+    const resourcesCollection = db.collection('resources');
+
+    const suffix = Date.now();
+    const lowSlug = `temp-low-${suffix}`;
+    const highSlug = `temp-high-${suffix}`;
+
+    // Clean up any stale test records first
+    await categoriesCollection.deleteMany({ slug: { $regex: '^temp-' } });
+    await resourcesCollection.deleteMany({ canonicalUrl: { $regex: '^https://tool-(low|high)-' } });
+
+    await categoriesCollection.insertMany([
+      { name: 'Low Entry Cat', slug: lowSlug, parentSlug: 'ai-tools', createdAt: new Date() },
+      { name: 'High Entry Cat', slug: highSlug, parentSlug: 'ai-tools', createdAt: new Date() },
+    ]);
+
+    // Insert 2 tools for lowSlug
+    await resourcesCollection.insertMany([
+      { name: 'Tool Low 1', canonicalUrl: `https://tool-low-1-${suffix}.org`, normalizedUrl: `https://tool-low-1-${suffix}.org`, categorySlugs: [lowSlug], status: 'active', createdAt: new Date() },
+      { name: 'Tool Low 2', canonicalUrl: `https://tool-low-2-${suffix}.org`, normalizedUrl: `https://tool-low-2-${suffix}.org`, categorySlugs: [lowSlug], status: 'active', createdAt: new Date() },
+    ]);
+
+    // Insert 5 tools for highSlug
+    const highTools = Array.from({ length: 5 }, (_, i) => ({
+      name: `Tool High ${i + 1}`,
+      canonicalUrl: `https://tool-high-${i + 1}-${suffix}.org`,
+      normalizedUrl: `https://tool-high-${i + 1}-${suffix}.org`,
+      categorySlugs: [highSlug],
+      status: 'active',
+      createdAt: new Date(),
+    }));
+    await resourcesCollection.insertMany(highTools);
+
+    try {
+      // Find count
+      const countAgg = await resourcesCollection.aggregate([
+        { $unwind: '$categorySlugs' },
+        { $group: { _id: '$categorySlugs', count: { $sum: 1 } } },
+      ]).toArray();
+      const countMap = new Map();
+      countAgg.forEach(i => countMap.set(i._id, i.count));
+
+      assert.strictEqual(countMap.get(lowSlug), 2);
+      assert.strictEqual(countMap.get(highSlug), 5);
+
+      // Perform prune for < 5
+      const toDelete = [lowSlug];
+      await resourcesCollection.updateMany(
+        { categorySlugs: { $in: toDelete } },
+        { $pull: { categorySlugs: { $in: toDelete } } }
+      );
+      await categoriesCollection.deleteMany({ slug: { $in: toDelete } });
+
+      // lowSlug should be gone, highSlug should remain
+      const lowCheck = await categoriesCollection.findOne({ slug: lowSlug });
+      const highCheck = await categoriesCollection.findOne({ slug: highSlug });
+      assert.strictEqual(lowCheck, null, 'Low entry category should be removed');
+      assert.ok(highCheck, 'Category with 5+ entries should be preserved');
+
+      // Tools from lowSlug should still exist in resources collection
+      const toolCheck = await resourcesCollection.findOne({ canonicalUrl: `https://tool-low-1-${suffix}.org` });
+      assert.ok(toolCheck, 'Tools from pruned category must remain permanently preserved in DB');
+    } finally {
+      await categoriesCollection.deleteMany({ slug: { $in: [lowSlug, highSlug] } });
+      await resourcesCollection.deleteMany({ categorySlugs: { $in: [lowSlug, highSlug] } });
+      await resourcesCollection.deleteMany({ canonicalUrl: { $regex: '^https://tool-(low|high)-' } });
+    }
+  });
 });
 
